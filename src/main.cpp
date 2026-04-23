@@ -17,6 +17,15 @@
 #include "imgui_impl_sdl3.h"
 #include "renderer.h"
 
+#define ASSERT_NO_GL_ERROR()                                                                   \
+  do {                                                                                         \
+    GLenum error = glGetError();                                                               \
+    if (error != GL_NO_ERROR) {                                                                \
+      fprintf(stderr, "OpenGL error: 0x%X (%d) at %s:%d\n", error, error, __FILE__, __LINE__); \
+      assert(!"OpenGL error detected");                                                        \
+    }                                                                                          \
+  } while (0)
+
 static void RenderUI(ImGuiIO& io, uint32_t rendered_texture, float thread_fps) {
   ImGui_ImplOpenGL3_NewFrame();
   ImGui_ImplSDL3_NewFrame();
@@ -170,7 +179,8 @@ static void MainLoop(SDL_Window* window, std::thread& render_thread, RenderThrea
       RenderUI(io, tex, thread_data.actual_fps);
 
       SDL_GL_SwapWindow(window);
-      assert(glGetError() == GL_NO_ERROR);
+      ASSERT_NO_GL_ERROR();
+
       {
         std::unique_lock<std::mutex> lock(thread_data.mutex);
         if (thread_data.frame_ready) {
