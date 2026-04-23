@@ -153,6 +153,13 @@ void DrawDebugSettingsWindow() {
       ImGui::TableNextColumn();
       ImGui::Checkbox("##Fence sync", &local_state.fence_sync);
 
+      ImGui::TableNextRow();
+      ImGui::TableNextColumn();
+      ImGui::AlignTextToFramePadding();
+      ImGui::Text("Vsync");
+      ImGui::TableNextColumn();
+      ImGui::Checkbox("##Vsync", &local_state.vsync);
+
       ImGui::EndTable();
     }
 
@@ -163,7 +170,8 @@ void DrawDebugSettingsWindow() {
         (local_state.target_thread_fps != g_debug_hackery_settings.target_thread_fps) ||
         (local_state.yield_in_event_loop_milliseconds != g_debug_hackery_settings.yield_in_event_loop_milliseconds) ||
         (local_state.flush_instead_of_finish != g_debug_hackery_settings.flush_instead_of_finish) ||
-        (local_state.fence_sync != g_debug_hackery_settings.fence_sync);
+        (local_state.fence_sync != g_debug_hackery_settings.fence_sync) ||
+        (local_state.vsync != g_debug_hackery_settings.vsync);
 
     ImGui::BeginDisabled(!is_modified);
 

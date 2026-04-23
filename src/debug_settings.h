@@ -14,22 +14,15 @@ typedef struct DebugHackerySettings {
   int yield_in_event_loop_milliseconds;
   bool flush_instead_of_finish;
   bool fence_sync;
+  bool vsync;
   int cube_count;
 
   int64_t poll_frequency_ns;
   int64_t ui_render_frequency_ns;
   int64_t thread_frequency_ns;
 
-  void Update() {
-    poll_frequency_ns = target_poll_fps ? kOneSecondNanos / static_cast<int64_t>(target_poll_fps) : 0;
-    ui_render_frequency_ns = target_ui_render_fps ? kOneSecondNanos / static_cast<int64_t>(target_ui_render_fps) : 0;
-    thread_frequency_ns = target_thread_fps ? kOneSecondNanos / static_cast<int64_t>(target_thread_fps) : 0;
-  }
-
-  void ApplyDebugSettings(DebugHackerySettings& new_state) {
-    *this = new_state;
-    Update();
-  }
+  void Update();
+  void ApplyDebugSettings(DebugHackerySettings& new_state);
 
 } DebugHackerySettings;
 

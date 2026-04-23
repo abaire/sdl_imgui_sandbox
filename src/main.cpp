@@ -236,7 +236,6 @@ int main(int, char**) {
     return -1;
   }
   SDL_GL_MakeCurrent(window, gl_context);
-  SDL_GL_SetSwapInterval(1);
 
   SDL_ShowWindow(window);
 
@@ -252,7 +251,7 @@ int main(int, char**) {
   ImGui_ImplSDL3_InitForOpenGL(window, gl_context);
   ImGui_ImplOpenGL3_Init(glsl_version);
 
-  g_debug_hackery_settings.Update();
+  g_debug_hackery_settings.ApplyDebugSettings(g_debug_hackery_settings);
   RenderThreadData thread_data;
   thread_data.width = 1280;
   thread_data.height = 720;
