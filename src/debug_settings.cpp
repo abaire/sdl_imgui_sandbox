@@ -2,6 +2,7 @@
 
 #include <SDL3/SDL.h>
 
+#include <cassert>
 #include <algorithm>
 
 DebugHackerySettings g_debug_hackery_settings = {
@@ -27,5 +28,5 @@ void DebugHackerySettings::Update() {
 void DebugHackerySettings::ApplyDebugSettings(DebugHackerySettings& new_state) {
   *this = new_state;
   Update();
-  SDL_GL_SetSwapInterval(vsync ? 1 : 0);
+  assert(SDL_GL_SetSwapInterval(vsync ? 1 : 0));
 }
