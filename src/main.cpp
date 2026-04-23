@@ -8,6 +8,9 @@
 #else
 #include <SDL3/SDL_opengl.h>
 #endif
+#include "Renderer.h"
+#include <glm/ext/matrix_clip_space.hpp>
+#include <glm/ext/matrix_transform.hpp>
 
 // Main code
 int main(int, char**)
@@ -73,6 +76,11 @@ int main(int, char**)
     ImGui_ImplSDL3_InitForOpenGL(window, gl_context);
     ImGui_ImplOpenGL3_Init(glsl_version);
 
+    // Initialize Renderer after ImGui_ImplOpenGL3_Init 
+    // so that imgui's internal GL loader is initialized.
+    Renderer renderer;
+    renderer.Init(10000); // 10,000 spinning cubes
+
     // Main loop
     bool done = false;
     while (!done)
@@ -112,8 +120,15 @@ int main(int, char**)
         // Rendering
         ImGui::Render();
         glViewport(0, 0, (int)io.DisplaySize.x, (int)io.DisplaySize.y);
-        glClearColor(0.45f, 0.55f, 0.60f, 1.00f);
-        glClear(GL_COLOR_BUFFER_BIT);
+        glClearColor(0.1f, 0.1f, 0.1f, 1.00f);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+        // Render our 3D scene before ImGui draw data
+        float time = SDL_GetTicks() / 1000.0f;
+        glm::mat4 projection = glm::perspective(glm::radians(45.0f), io.DisplaySize.x / io.DisplaySize.y, 0.1f, 1000.0f);
+        glm::mat4 view = glm::lookAt(glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, -1.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+        renderer.Render(view, projection, time);
+
         ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
         SDL_GL_SwapWindow(window);
     }

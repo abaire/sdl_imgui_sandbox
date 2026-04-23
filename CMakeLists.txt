@@ -25,6 +25,14 @@ FetchContent_Declare(
 
 FetchContent_MakeAvailable(imgui)
 
+# Fetch GLM
+FetchContent_Declare(
+    glm
+    GIT_REPOSITORY https://github.com/g-truc/glm.git
+    GIT_TAG master
+)
+FetchContent_MakeAvailable(glm)
+
 # Create an ImGui library target
 add_library(imgui STATIC
     ${imgui_SOURCE_DIR}/imgui.cpp
@@ -54,9 +62,9 @@ else()
     target_link_libraries(imgui PUBLIC OpenGL::GL)
 endif()
 
-add_executable(sandbox src/main.cpp)
+add_executable(sandbox src/main.cpp src/Renderer.cpp)
 
-target_link_libraries(sandbox PRIVATE imgui SDL3::SDL3-static)
+target_link_libraries(sandbox PRIVATE imgui SDL3::SDL3-static glm::glm)
 
 if(APPLE)
     target_link_libraries(sandbox PRIVATE OpenGL::GL)
