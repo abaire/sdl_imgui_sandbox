@@ -1,5 +1,8 @@
 name: Build
 
+permissions:
+  contents: write
+
 on:
   push:
     branches: [ main ]
@@ -88,3 +91,51 @@ jobs:
         with:
           name: sandbox-macos
           path: sandbox-mac.zip
+
+  release:
+    needs: [build-windows, build-linux, build-macos]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download Windows Artifact
+        uses: actions/download-artifact@v7
+        with:
+          name: sandbox-windows
+          path: artifacts/windows
+
+      - name: Download Linux Artifact
+        uses: actions/download-artifact@v7
+        with:
+          name: sandbox-linux
+          path: artifacts/linux
+
+      - name: Download macOS Artifact
+        uses: actions/download-artifact@v7
+        with:
+          name: sandbox-macos
+          path: artifacts/macos
+
+      - name: Prepare Release Assets
+        run: |
+          mkdir -p release-assets
+          cp artifacts/windows/sandbox.exe release-assets/sandbox-windows.exe
+          cp artifacts/linux/sandbox release-assets/sandbox-linux
+          cp artifacts/macos/sandbox-mac.zip release-assets/sandbox-macos.zip
+          chmod +x release-assets/sandbox-linux
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: latest
+          name: Latest Release
+          body: |
+            Automated build of the latest commit to main.
+            
+            Commit: ${{ github.sha }}
+          draft: false
+          prerelease: false
+          files: |
+            release-assets/sandbox-windows.exe
+            release-assets/sandbox-linux
+            release-assets/sandbox-macos.zip
+          make_latest: true
