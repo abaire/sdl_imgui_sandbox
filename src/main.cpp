@@ -1,20 +1,5 @@
-#if defined(__APPLE__)
-#define GL_SILENCE_DEPRECATION
-#endif
-
+#include <epoxy/gl.h>
 #include <SDL3/SDL.h>
-#ifdef _WIN32
-#include <glad/glad.h>
-#endif
-
-#if defined(IMGUI_IMPL_OPENGL_ES2)
-#include <SDL3/SDL_opengles2.h>
-#elif defined(__APPLE__)
-#define GL_SILENCE_DEPRECATION
-#include <OpenGL/gl3.h>
-#else
-#include <SDL3/SDL_opengl.h>
-#endif
 
 #include <cstdio>
 #include <glm/ext/matrix_clip_space.hpp>
@@ -24,6 +9,11 @@
 #include "imgui.h"
 #include "imgui_impl_opengl3.h"
 #include "imgui_impl_sdl3.h"
+#include "gloffscreen.h"
+#include <thread>
+#include <mutex>
+#include <condition_variable>
+#include <atomic>
 
 static constexpr int kInitialCubeCount = 10000;
 static constexpr int kMaxCubeCount = 50000000;
@@ -219,7 +209,7 @@ static void DrawDebugSettingsWindow() {
   ImGui::End();
 }
 
-static void RenderFrame(Renderer& renderer, ImGuiIO& io) {
+static void RenderFrame(ImGuiIO& io, uint32_t rendered_texture) {
   ImGui_ImplOpenGL3_NewFrame();
   ImGui_ImplSDL3_NewFrame();
   ImGui::NewFrame();
@@ -244,14 +234,68 @@ static void RenderFrame(Renderer& renderer, ImGuiIO& io) {
   glClearColor(0.1f, 0.1f, 0.1f, 1.00f);
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-  // Render our 3D scene before ImGui draw data
-  renderer.UpdateInstanceCount(g_debug_hackery_settings.cube_count);
-  float time = static_cast<float>(SDL_GetTicks()) / 1000.0f;
-  glm::mat4 projection = glm::perspective(glm::radians(45.0f), io.DisplaySize.x / io.DisplaySize.y, 0.1f, 1000.0f);
-  glm::mat4 view = glm::lookAt(glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, -1.0f), glm::vec3(0.0f, 1.0f, 0.0f));
-  renderer.Render(view, projection, time);
+  // Draw the rendered texture from the other thread
+  if (rendered_texture) {
+    ImGui::GetBackgroundDrawList()->AddImage((ImTextureID)(intptr_t)rendered_texture, ImVec2(0, 0),
+                                            ImVec2(io.DisplaySize.x, io.DisplaySize.y));
+  }
 
   ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+}
+
+struct RenderThreadData {
+  std::mutex mutex;
+  std::condition_variable cv;
+  std::atomic<bool> quit{false};
+  std::atomic<bool> frame_ready{false};
+  std::atomic<int> cube_count{kInitialCubeCount};
+  int width = 1280;
+  int height = 720;
+  uint32_t texture_id = 0;
+};
+
+void RenderThreadFunc(RenderThreadData* data) {
+  GloContext* ctx = glo_context_create();
+  if (!ctx) {
+    printf("Failed to create offscreen GL context\n");
+    return;
+  }
+
+  Renderer renderer;
+  renderer.Init(data->cube_count);
+
+  while (!data->quit) {
+    int w, h, count;
+    {
+      std::unique_lock<std::mutex> lock(data->mutex);
+      // Wait for the main thread to be ready for a new frame
+      data->cv.wait(lock, [&] { return !data->frame_ready || data->quit; });
+      if (data->quit) break;
+
+      w = data->width;
+      h = data->height;
+      count = data->cube_count;
+    }
+
+    renderer.CreateFBO(w, h);
+    renderer.UpdateInstanceCount(count);
+
+    float time = static_cast<float>(SDL_GetTicks()) / 1000.0f;
+    glm::mat4 projection = glm::perspective(glm::radians(45.0f), (float)w / (float)h, 0.1f, 1000.0f);
+    glm::mat4 view = glm::lookAt(glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, -1.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+
+    renderer.Render(view, projection, time);
+    glFinish();  // Ensure rendering is complete before hand-off
+
+    {
+      std::unique_lock<std::mutex> lock(data->mutex);
+      data->texture_id = renderer.GetTexture();
+      data->frame_ready = true;
+      data->cv.notify_one();
+    }
+  }
+
+  glo_context_destroy(ctx);
 }
 
 // Main code
@@ -298,14 +342,6 @@ int main(int, char**) {
   SDL_GL_MakeCurrent(window, gl_context);
   SDL_GL_SetSwapInterval(1);  // Enable vsync
 
-#ifdef _WIN32
-  // Initialize GLAD
-  if (!gladLoadGLLoader((GLADloadproc)SDL_GL_GetProcAddress)) {
-    printf("Failed to initialize GLAD\n");
-    return -1;
-  }
-#endif
-
   SDL_ShowWindow(window);
 
   // Setup Dear ImGui context
@@ -324,21 +360,21 @@ int main(int, char**) {
   ImGui_ImplSDL3_InitForOpenGL(window, gl_context);
   ImGui_ImplOpenGL3_Init(glsl_version);
 
-  // Initialize Renderer after ImGui_ImplOpenGL3_Init
-  // so that imgui's internal GL loader is initialized.
-  Renderer renderer;
-  renderer.Init(g_debug_hackery_settings.cube_count);
+  // Start render thread
+  RenderThreadData thread_data;
+  thread_data.width = 1280;
+  thread_data.height = 720;
+  thread_data.cube_count = g_debug_hackery_settings.cube_count;
+  std::thread render_thread(RenderThreadFunc, &thread_data);
 
   // Main loop
   bool done = false;
 
-  GLsync frame_sync = nullptr;
-  uint64_t next_frame = 0;
   uint64_t next_poll = 0;
 
   while (!done) {
     uint64_t now = 0;
-    if (g_debug_hackery_settings.render_frequency_ns > 0 || g_debug_hackery_settings.poll_frequency_ns > 0) {
+    if (g_debug_hackery_settings.poll_frequency_ns > 0) {
       now = SDL_GetTicksNS();
     }
 
@@ -349,37 +385,42 @@ int main(int, char**) {
         if (event.type == SDL_EVENT_QUIT) done = true;
         if (event.type == SDL_EVENT_WINDOW_CLOSE_REQUESTED && event.window.windowID == SDL_GetWindowID(window))
           done = true;
+        if (event.type == SDL_EVENT_WINDOW_RESIZED) {
+          std::unique_lock<std::mutex> lock(thread_data.mutex);
+          thread_data.width = event.window.data1;
+          thread_data.height = event.window.data2;
+        }
       }
       next_poll = now + g_debug_hackery_settings.poll_frequency_ns;
     }
 
-    if (!g_debug_hackery_settings.render_frequency_ns || now >= next_frame) {
-      RenderFrame(renderer, io);
+    // Update thread data from UI settings
+    thread_data.cube_count = g_debug_hackery_settings.cube_count;
 
-      if (frame_sync) {
-        glClientWaitSync(frame_sync, GL_SYNC_FLUSH_COMMANDS_BIT, GL_TIMEOUT_IGNORED);
-        glDeleteSync(frame_sync);
-        frame_sync = nullptr;
-      } else if (!g_debug_hackery_settings.fence_sync) {
-        if (g_debug_hackery_settings.flush_instead_of_finish) {
-          glFlush();
-        } else {
-          glFinish();
-        }
+    uint32_t tex = 0;
+    {
+      std::unique_lock<std::mutex> lock(thread_data.mutex);
+      // Main thread grabs the texture if it's ready
+      if (thread_data.frame_ready) {
+        tex = thread_data.texture_id;
       }
-
-      SDL_GL_SwapWindow(window);
-      assert(glGetError() == GL_NO_ERROR);
-
-      if (g_debug_hackery_settings.fence_sync) {
-        frame_sync = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
-      }
-
-      next_frame = now + g_debug_hackery_settings.render_frequency_ns;
     }
 
-    if (g_debug_hackery_settings.render_frequency_ns > 0 && g_debug_hackery_settings.poll_frequency_ns > 0) {
-      int64_t deadline = std::min(next_poll, next_frame);
+    RenderFrame(io, tex);
+
+    {
+      // Lock while swapping and signaling the render thread
+      std::unique_lock<std::mutex> lock(thread_data.mutex);
+      SDL_GL_SwapWindow(window);
+      if (thread_data.frame_ready) {
+        thread_data.frame_ready = false;
+        thread_data.cv.notify_one();
+      }
+    }
+    assert(glGetError() == GL_NO_ERROR);
+
+    if (g_debug_hackery_settings.poll_frequency_ns > 0) {
+      int64_t deadline = next_poll;
       if (now < deadline) {
         SDL_DelayPrecise(deadline - now);
       }
@@ -389,6 +430,12 @@ int main(int, char**) {
   }
 
   // Cleanup
+  {
+    std::unique_lock<std::mutex> lock(thread_data.mutex);
+    thread_data.quit = true;
+    thread_data.cv.notify_all();
+  }
+  render_thread.join();
   ImGui_ImplOpenGL3_Shutdown();
   ImGui_ImplSDL3_Shutdown();
   ImGui::DestroyContext();
