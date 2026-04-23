@@ -15,6 +15,7 @@ typedef struct DebugHackerySettings {
   bool flush_instead_of_finish;
   bool fence_sync;
   bool vsync;
+  bool allow_outrunning;
   int cube_count;
 
   int64_t poll_frequency_ns;

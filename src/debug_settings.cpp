@@ -2,6 +2,7 @@
 
 #include <SDL3/SDL.h>
 
+#include <cassert>
 #include <algorithm>
 
 DebugHackerySettings g_debug_hackery_settings = {
@@ -12,6 +13,7 @@ DebugHackerySettings g_debug_hackery_settings = {
     .flush_instead_of_finish = false,
     .fence_sync = false,
     .vsync = true,
+    .allow_outrunning = false,
     .cube_count = kInitialCubeCount,
     .poll_frequency_ns = 0,
     .ui_render_frequency_ns = 0,
@@ -27,5 +29,7 @@ void DebugHackerySettings::Update() {
 void DebugHackerySettings::ApplyDebugSettings(DebugHackerySettings& new_state) {
   *this = new_state;
   Update();
-  SDL_GL_SetSwapInterval(vsync ? 1 : 0);
+  if (!SDL_GL_SetSwapInterval(vsync ? 1 : 0)) {
+    assert(!"Failed to set swap interval.");
+  }
 }

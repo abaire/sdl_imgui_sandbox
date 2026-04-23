@@ -160,6 +160,13 @@ void DrawDebugSettingsWindow() {
       ImGui::TableNextColumn();
       ImGui::Checkbox("##Vsync", &local_state.vsync);
 
+      ImGui::TableNextRow();
+      ImGui::TableNextColumn();
+      ImGui::AlignTextToFramePadding();
+      ImGui::Text("Allow outrunning UI");
+      ImGui::TableNextColumn();
+      ImGui::Checkbox("##Allow outrunning UI", &local_state.allow_outrunning);
+
       ImGui::EndTable();
     }
 
@@ -171,7 +178,8 @@ void DrawDebugSettingsWindow() {
         (local_state.yield_in_event_loop_milliseconds != g_debug_hackery_settings.yield_in_event_loop_milliseconds) ||
         (local_state.flush_instead_of_finish != g_debug_hackery_settings.flush_instead_of_finish) ||
         (local_state.fence_sync != g_debug_hackery_settings.fence_sync) ||
-        (local_state.vsync != g_debug_hackery_settings.vsync);
+        (local_state.vsync != g_debug_hackery_settings.vsync) ||
+        (local_state.allow_outrunning != g_debug_hackery_settings.allow_outrunning);
 
     ImGui::BeginDisabled(!is_modified);
 
