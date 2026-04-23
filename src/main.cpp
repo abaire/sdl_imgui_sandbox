@@ -24,6 +24,25 @@
 
 #include "Renderer.h"
 
+static constexpr int kInitialCubeCount = 10000;
+static constexpr int kMaxCubeCount = 50000000;
+
+typedef struct DebugHackerySettings {
+  int target_poll_fps;
+  int target_render_fps;
+  int yield_in_event_loop_milliseconds;
+  bool flush_instead_of_finish;
+  bool fence_sync;
+  int cube_count;
+
+  int64_t poll_frequency_ns;
+  int64_t render_frequency_ns;
+} DebugHackerySettings;
+
+static DebugHackerySettings g_debug_hackery_settings = {
+    .cube_count = kInitialCubeCount,
+};
+
 static void DrawFramerateOverlayWindow() {
   const float PAD = 20.0f;
   const float FLICKER_RECT_W = 8.f;
@@ -82,6 +101,123 @@ static void DrawFramerateOverlayWindow() {
   ImGui::End();
 }
 
+static void ApplyDebugSettings(DebugHackerySettings& new_state) {
+  static constexpr int64_t kOneSecondNanos = 1000000000;
+  g_debug_hackery_settings = new_state;
+
+  g_debug_hackery_settings.poll_frequency_ns =
+      new_state.target_poll_fps ? kOneSecondNanos / static_cast<int64_t>(new_state.target_poll_fps) : 0;
+  g_debug_hackery_settings.render_frequency_ns =
+      new_state.target_render_fps ? kOneSecondNanos / static_cast<int64_t>(new_state.target_render_fps) : 0;
+}
+
+static void DrawDebugSettingsWindow() {
+  static DebugHackerySettings local_state;
+  static bool initialized = false;
+
+  if (!initialized) {
+    local_state = g_debug_hackery_settings;
+    initialized = true;
+  }
+
+  ImGuiViewport* viewport = ImGui::GetMainViewport();
+  ImVec2 pos(viewport->WorkPos.x + 10.0f, viewport->WorkPos.y + viewport->WorkSize.y - 10.0f);
+  ImGui::SetNextWindowPos(pos, ImGuiCond_Always, ImVec2(0.0f, 1.0f));
+  ImGui::SetNextWindowBgAlpha(0.9f);
+
+  ImGuiWindowFlags flags = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_AlwaysAutoResize |
+                           ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoMove;
+
+  if (ImGui::Begin("Debug Hackery", nullptr, flags)) {
+    ImGui::Text("Debug Hackery");
+    ImGui::Separator();
+
+    if (ImGui::BeginTable("##hackery_table", 2)) {
+      ImGui::TableNextRow();
+      ImGui::TableNextColumn();
+      ImGui::AlignTextToFramePadding();
+      ImGui::Text("Cube count");
+      ImGui::TableNextColumn();
+      ImGui::SetNextItemWidth(80.0f);
+      if (ImGui::InputInt("##Cube count", &local_state.cube_count, 0)) {
+        if (local_state.cube_count < 0) {
+          local_state.cube_count = 0;
+        } else if (local_state.cube_count > kMaxCubeCount) {
+          local_state.cube_count = kMaxCubeCount;
+        }
+      }
+
+      ImGui::TableNextRow();
+      ImGui::TableNextColumn();
+      ImGui::AlignTextToFramePadding();
+      ImGui::Text("Poll FPS");
+      ImGui::TableNextColumn();
+      ImGui::SetNextItemWidth(60.0f);
+      if (ImGui::InputInt("##Poll FPS", &local_state.target_poll_fps, 0)) {
+        if (local_state.target_poll_fps > 600) local_state.target_poll_fps = 600;
+      }
+
+      ImGui::TableNextRow();
+      ImGui::TableNextColumn();
+      ImGui::AlignTextToFramePadding();
+      ImGui::Text("Render FPS");
+      ImGui::TableNextColumn();
+      ImGui::SetNextItemWidth(60.0f);
+      if (ImGui::InputInt("##Render FPS", &local_state.target_render_fps, 0)) {
+        if (local_state.target_render_fps > 600) local_state.target_render_fps = 600;
+      }
+
+      ImGui::TableNextRow();
+      ImGui::TableNextColumn();
+      ImGui::AlignTextToFramePadding();
+      ImGui::Text("Yield ms");
+      ImGui::TableNextColumn();
+      ImGui::SetNextItemWidth(60.0f);
+      if (ImGui::InputInt("##Yield ms", &local_state.yield_in_event_loop_milliseconds, 0)) {
+        if (local_state.yield_in_event_loop_milliseconds > 66) local_state.yield_in_event_loop_milliseconds = 66;
+      }
+
+      ImGui::TableNextRow();
+      ImGui::TableNextColumn();
+      ImGui::AlignTextToFramePadding();
+      ImGui::Text("glFlush instead of glFinish");
+      ImGui::TableNextColumn();
+      ImGui::Checkbox("##glFlush instead of glFinish", &local_state.flush_instead_of_finish);
+
+      ImGui::TableNextRow();
+      ImGui::TableNextColumn();
+      ImGui::AlignTextToFramePadding();
+      ImGui::Text("Fence sync");
+      ImGui::TableNextColumn();
+      ImGui::Checkbox("##Fence sync", &local_state.fence_sync);
+
+      ImGui::EndTable();
+    }
+
+    bool is_modified =
+        (local_state.cube_count != g_debug_hackery_settings.cube_count) ||
+        (local_state.target_poll_fps != g_debug_hackery_settings.target_poll_fps) ||
+        (local_state.target_render_fps != g_debug_hackery_settings.target_render_fps) ||
+        (local_state.yield_in_event_loop_milliseconds != g_debug_hackery_settings.yield_in_event_loop_milliseconds) ||
+        (local_state.flush_instead_of_finish != g_debug_hackery_settings.flush_instead_of_finish) ||
+        (local_state.fence_sync != g_debug_hackery_settings.fence_sync);
+
+    ImGui::BeginDisabled(!is_modified);
+
+    if (ImGui::Button("Apply")) {
+      ApplyDebugSettings(local_state);
+    }
+
+    ImGui::SameLine();
+    if (ImGui::Button("Cancel")) {
+      local_state = g_debug_hackery_settings;
+    }
+
+    ImGui::EndDisabled();
+  }
+  ImGui::End();
+}
+
 static void RenderFrame(Renderer& renderer, ImGuiIO& io) {
   ImGui_ImplOpenGL3_NewFrame();
   ImGui_ImplSDL3_NewFrame();
@@ -99,6 +235,7 @@ static void RenderFrame(Renderer& renderer, ImGuiIO& io) {
   ImGui::End();
 
   DrawFramerateOverlayWindow();
+  DrawDebugSettingsWindow();
 
   // Rendering
   ImGui::Render();
@@ -107,7 +244,8 @@ static void RenderFrame(Renderer& renderer, ImGuiIO& io) {
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
   // Render our 3D scene before ImGui draw data
-  float time = SDL_GetTicks() / 1000.0f;
+  renderer.UpdateInstanceCount(g_debug_hackery_settings.cube_count);
+  float time = static_cast<float>(SDL_GetTicks()) / 1000.0f;
   glm::mat4 projection = glm::perspective(glm::radians(45.0f), io.DisplaySize.x / io.DisplaySize.y, 0.1f, 1000.0f);
   glm::mat4 view = glm::lookAt(glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, -1.0f), glm::vec3(0.0f, 1.0f, 0.0f));
   renderer.Render(view, projection, time);
@@ -179,21 +317,65 @@ int main(int, char**) {
   // Initialize Renderer after ImGui_ImplOpenGL3_Init
   // so that imgui's internal GL loader is initialized.
   Renderer renderer;
-  renderer.Init(10000);  // 10,000 spinning cubes
+  renderer.Init(g_debug_hackery_settings.cube_count);
 
   // Main loop
   bool done = false;
+
+  GLsync frame_sync = nullptr;
+  uint64_t next_frame = 0;
+  uint64_t next_poll = 0;
+
   while (!done) {
-    SDL_Event event;
-    while (SDL_PollEvent(&event)) {
-      ImGui_ImplSDL3_ProcessEvent(&event);
-      if (event.type == SDL_EVENT_QUIT) done = true;
-      if (event.type == SDL_EVENT_WINDOW_CLOSE_REQUESTED && event.window.windowID == SDL_GetWindowID(window))
-        done = true;
+    uint64_t now = 0;
+    if (g_debug_hackery_settings.render_frequency_ns > 0 || g_debug_hackery_settings.poll_frequency_ns > 0) {
+      now = SDL_GetTicksNS();
     }
 
-    RenderFrame(renderer, io);
-    SDL_GL_SwapWindow(window);
+    if (!g_debug_hackery_settings.poll_frequency_ns || now >= next_poll) {
+      SDL_Event event;
+      while (SDL_PollEvent(&event)) {
+        ImGui_ImplSDL3_ProcessEvent(&event);
+        if (event.type == SDL_EVENT_QUIT) done = true;
+        if (event.type == SDL_EVENT_WINDOW_CLOSE_REQUESTED && event.window.windowID == SDL_GetWindowID(window))
+          done = true;
+      }
+      next_poll = now + g_debug_hackery_settings.poll_frequency_ns;
+    }
+
+    if (!g_debug_hackery_settings.render_frequency_ns || now >= next_frame) {
+      RenderFrame(renderer, io);
+
+      if (frame_sync) {
+        glClientWaitSync(frame_sync, GL_SYNC_FLUSH_COMMANDS_BIT, GL_TIMEOUT_IGNORED);
+        glDeleteSync(frame_sync);
+        frame_sync = nullptr;
+      } else if (!g_debug_hackery_settings.fence_sync) {
+        if (g_debug_hackery_settings.flush_instead_of_finish) {
+          glFlush();
+        } else {
+          glFinish();
+        }
+      }
+
+      SDL_GL_SwapWindow(window);
+      assert(glGetError() == GL_NO_ERROR);
+
+      if (g_debug_hackery_settings.fence_sync) {
+        frame_sync = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
+      }
+
+      next_frame = now + g_debug_hackery_settings.render_frequency_ns;
+    }
+
+    if (g_debug_hackery_settings.render_frequency_ns > 0 && g_debug_hackery_settings.poll_frequency_ns > 0) {
+      int64_t deadline = std::min(next_poll, next_frame);
+      if (now < deadline) {
+        SDL_DelayPrecise(deadline - now);
+      }
+    } else if (g_debug_hackery_settings.yield_in_event_loop_milliseconds) {
+      SDL_Delay(g_debug_hackery_settings.yield_in_event_loop_milliseconds);
+    }
   }
 
   // Cleanup
