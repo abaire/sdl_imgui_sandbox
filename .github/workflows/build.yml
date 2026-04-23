@@ -7,26 +7,16 @@ on:
   push:
     branches: [ main ]
   pull_request:
-    branches: [ main ]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: true
 
 jobs:
-  build-windows:
-    runs-on: windows-latest
-    steps:
-      - uses: actions/checkout@v6
-
-      - name: Configure CMake
-        run: cmake -B build -DCMAKE_BUILD_TYPE=Release
-
-      - name: Build
-        run: cmake --build build --config Release
-
-      - name: Upload Artifact
-        uses: actions/upload-artifact@v7
-        with:
-          name: sandbox-windows
-          path: build/Release/sandbox.exe
-
+  # ---------------------------------------------------------------------------
+  # Linux (native)
+  # ---------------------------------------------------------------------------
   build-linux:
     runs-on: ubuntu-latest
     steps:
@@ -36,6 +26,9 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y \
+            meson \
+            ninja-build \
+            pkg-config \
             libasound2-dev \
             libpulse-dev \
             libdbus-1-dev \
@@ -50,8 +43,7 @@ jobs:
             libegl1-mesa-dev \
             libgles2-mesa-dev \
             libwayland-dev \
-            libxkbcommon-dev \
-            ninja-build
+            libxkbcommon-dev
 
       - name: Configure CMake
         run: cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
@@ -65,10 +57,67 @@ jobs:
           name: sandbox-linux
           path: build/sandbox
 
+  # ---------------------------------------------------------------------------
+  # Windows — cross-compiled from Linux using llvm-mingw (Clang + LLD).
+  # PDB debug symbols are generated alongside the .exe.
+  # ---------------------------------------------------------------------------
+  build-windows:
+    runs-on: ubuntu-latest
+    env:
+      LLVM_MINGW_VERSION: "20260421"
+      LLVM_MINGW_ROOT: ${{ github.workspace }}/llvm-mingw
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install Host Build Tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y meson ninja-build pkg-config
+
+      - name: Download llvm-mingw
+        run: |
+          ARCHIVE="llvm-mingw-${LLVM_MINGW_VERSION}-ucrt-ubuntu-22.04-x86_64.tar.xz"
+          curl -fSL \
+            "https://github.com/mstorsjo/llvm-mingw/releases/download/${LLVM_MINGW_VERSION}/${ARCHIVE}" \
+            -o llvm-mingw.tar.xz
+          mkdir -p "${LLVM_MINGW_ROOT}"
+          tar -xf llvm-mingw.tar.xz --strip-components=1 -C "${LLVM_MINGW_ROOT}"
+
+      - name: Configure CMake (Windows cross)
+        run: |
+          cmake -B build-win -G Ninja \
+            -DCMAKE_TOOLCHAIN_FILE=cmake/windows-x86_64-llvm-mingw.cmake \
+            -DLLVM_MINGW_ROOT="${LLVM_MINGW_ROOT}" \
+            -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        run: cmake --build build-win
+
+      - name: Collect Artifacts
+        run: |
+          mkdir -p dist-win
+          cp build-win/sandbox.exe dist-win/
+          # PDB is emitted next to the executable by lld (--pdb= flag)
+          if [ -f build-win/sandbox.pdb ]; then
+            cp build-win/sandbox.pdb dist-win/
+          fi
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: sandbox-windows
+          path: dist-win/
+
+  # ---------------------------------------------------------------------------
+  # macOS (native)
+  # ---------------------------------------------------------------------------
   build-macos:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v6
+
+      - name: Install Dependencies
+        run: brew install meson ninja
 
       - name: Configure CMake
         run: cmake -B build -DCMAKE_BUILD_TYPE=Release
@@ -79,7 +128,6 @@ jobs:
       - name: Package .app
         run: |
           cd build
-          # Check if it's in a subfolder (like Release) or not
           if [ -d "Release/sandbox.app" ]; then
             zip -r ../sandbox-mac.zip Release/sandbox.app
           else
@@ -92,6 +140,9 @@ jobs:
           name: sandbox-macos
           path: sandbox-mac.zip
 
+  # ---------------------------------------------------------------------------
+  # Release (push to main only)
+  # ---------------------------------------------------------------------------
   release:
     needs: [build-windows, build-linux, build-macos]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
@@ -119,23 +170,28 @@ jobs:
         run: |
           mkdir -p release-assets
           cp artifacts/windows/sandbox.exe release-assets/sandbox-windows.exe
+          # Include PDB if present
+          if [ -f artifacts/windows/sandbox.pdb ]; then
+            cp artifacts/windows/sandbox.pdb release-assets/sandbox-windows.pdb
+          fi
           cp artifacts/linux/sandbox release-assets/sandbox-linux
-          cp artifacts/macos/sandbox-mac.zip release-assets/sandbox-macos.zip
           chmod +x release-assets/sandbox-linux
+          cp artifacts/macos/sandbox-mac.zip release-assets/sandbox-macos.zip
 
       - name: Create Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: latest
           name: Latest Release
           body: |
             Automated build of the latest commit to main.
-            
+
             Commit: ${{ github.sha }}
           draft: false
           prerelease: false
           files: |
             release-assets/sandbox-windows.exe
+            release-assets/sandbox-windows.pdb
             release-assets/sandbox-linux
             release-assets/sandbox-macos.zip
           make_latest: true

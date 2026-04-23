@@ -1,15 +1,6 @@
 #pragma once
 
-#ifdef _WIN32
-#include <glad/glad.h>
-#else
-#ifdef __APPLE__
-#define GL_SILENCE_DEPRECATION
-#include <OpenGL/gl3.h>
-#else
-#include <SDL3/SDL_opengl.h>
-#endif
-#endif
+#include <epoxy/gl.h>
 
 #include <cstdint>
 #include <glm/glm.hpp>
@@ -31,10 +22,15 @@ class Renderer {
   void UpdateInstanceCount(int instanceCount);
   void Render(const glm::mat4& view, const glm::mat4& projection, float time);
 
+  void CreateFBO(int width, int height);
+  uint32_t GetTexture() const { return texture; }
+
  private:
   uint32_t shaderProgram;
   uint32_t VAO, VBO, EBO, instanceVBO;
+  uint32_t FBO, texture, RBO;
   int numInstances;
+  int width, height;
 
   void CompileShaders();
   void SetupGeometry();

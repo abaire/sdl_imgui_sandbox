@@ -55,7 +55,18 @@ void main()
 }
 )";
 
-Renderer::Renderer() : shaderProgram(0), VAO(0), VBO(0), EBO(0), instanceVBO(0), numInstances(0) {}
+Renderer::Renderer()
+    : shaderProgram(0),
+      VAO(0),
+      VBO(0),
+      EBO(0),
+      instanceVBO(0),
+      FBO(0),
+      texture(0),
+      RBO(0),
+      numInstances(0),
+      width(0),
+      height(0) {}
 
 Renderer::~Renderer() {
   if (VAO) glDeleteVertexArrays(1, &VAO);
@@ -63,6 +74,9 @@ Renderer::~Renderer() {
   if (EBO) glDeleteBuffers(1, &EBO);
   if (instanceVBO) glDeleteBuffers(1, &instanceVBO);
   if (shaderProgram) glDeleteProgram(shaderProgram);
+  if (FBO) glDeleteFramebuffers(1, &FBO);
+  if (texture) glDeleteTextures(1, &texture);
+  if (RBO) glDeleteRenderbuffers(1, &RBO);
 }
 
 void Renderer::CompileShaders() {
@@ -205,21 +219,63 @@ void Renderer::UpdateInstanceCount(int instanceCount) {
 
   glBindVertexArray(0);
 }
+ 
+void Renderer::CreateFBO(int w, int h) {
+  if (width == w && height == h && FBO != 0) return;
+ 
+  width = w;
+  height = h;
+ 
+  if (FBO) glDeleteFramebuffers(1, &FBO);
+  if (texture) glDeleteTextures(1, &texture);
+  if (RBO) glDeleteRenderbuffers(1, &RBO);
+ 
+  glGenFramebuffers(1, &FBO);
+  glBindFramebuffer(GL_FRAMEBUFFER, FBO);
+ 
+  // Create texture
+  glGenTextures(1, &texture);
+  glBindTexture(GL_TEXTURE_2D, texture);
+  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, NULL);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+  glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, texture, 0);
+ 
+  // Create renderbuffer for depth and stencil
+  glGenRenderbuffers(1, &RBO);
+  glBindRenderbuffer(GL_RENDERBUFFER, RBO);
+  glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, width, height);
+  glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, RBO);
+ 
+  if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
+    std::cerr << "ERROR::FRAMEBUFFER:: Framebuffer is not complete!" << std::endl;
+  }
+ 
+  glBindFramebuffer(GL_FRAMEBUFFER, 0);
+}
 
 void Renderer::Render(const glm::mat4& view, const glm::mat4& projection, float time) {
+  if (FBO == 0) return;
+ 
+  glBindFramebuffer(GL_FRAMEBUFFER, FBO);
+  glViewport(0, 0, width, height);
+  glClearColor(0.1f, 0.1f, 0.1f, 1.00f);
+  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+ 
   // Enable depth testing for 3D rendering
   glEnable(GL_DEPTH_TEST);
-
+ 
   glUseProgram(shaderProgram);
-
+ 
   // Set uniforms
   glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "view"), 1, GL_FALSE, glm::value_ptr(view));
   glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "projection"), 1, GL_FALSE, glm::value_ptr(projection));
   glUniform1f(glGetUniformLocation(shaderProgram, "time"), time);
-
+ 
   glBindVertexArray(VAO);
   glDrawElementsInstanced(GL_TRIANGLES, 36, GL_UNSIGNED_INT, 0, numInstances);
   glBindVertexArray(0);
-
-  glDisable(GL_DEPTH_TEST);  // Reset state just in case ImGui relies on it
+ 
+  glDisable(GL_DEPTH_TEST);
+  glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
