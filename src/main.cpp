@@ -89,8 +89,10 @@ void RenderThreadFunc(RenderThreadData* data) {
     int w, h, count;
     {
       std::unique_lock<std::mutex> lock(data->mutex);
-      // Wait for the main thread to be ready for a new frame
-      data->cv.wait(lock, [&] { return !data->frame_ready || data->quit; });
+      // Wait for the main thread to be ready for a new frame, unless we are allowed to outrun
+      if (!g_debug_hackery_settings.allow_outrunning) {
+        data->cv.wait(lock, [&] { return !data->frame_ready || data->quit; });
+      }
       if (data->quit) break;
 
       w = data->width;
@@ -196,7 +198,9 @@ static void MainLoop(SDL_Window* window, std::thread& render_thread, RenderThrea
         std::unique_lock<std::mutex> lock(thread_data.mutex);
         if (thread_data.frame_ready) {
           thread_data.frame_ready = false;
-          thread_data.cv.notify_one();
+          if (!g_debug_hackery_settings.allow_outrunning) {
+            thread_data.cv.notify_one();
+          }
         }
       }
 
