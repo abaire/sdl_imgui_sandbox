@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.30)
 project(sandbox CXX)
 
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 include(FetchContent)
@@ -32,6 +32,16 @@ FetchContent_Declare(
     GIT_TAG master
 )
 FetchContent_MakeAvailable(glm)
+
+if(WIN32)
+    # Fetch GLAD (only needed on Windows)
+    FetchContent_Declare(
+        glad
+        GIT_REPOSITORY https://github.com/Dav1dde/glad.git
+        GIT_TAG v0.1.36
+    )
+    FetchContent_MakeAvailable(glad)
+endif()
 
 # Create an ImGui library target
 add_library(imgui STATIC
@@ -79,7 +89,7 @@ target_link_libraries(sandbox PRIVATE imgui SDL3::SDL3-static glm::glm)
 if(APPLE)
     target_link_libraries(sandbox PRIVATE OpenGL::GL)
 elseif(WIN32)
-    target_link_libraries(sandbox PRIVATE opengl32)
+    target_link_libraries(sandbox PRIVATE glad opengl32)
 else()
     target_link_libraries(sandbox PRIVATE OpenGL::GL)
     target_compile_definitions(sandbox PRIVATE GL_GLEXT_PROTOTYPES)

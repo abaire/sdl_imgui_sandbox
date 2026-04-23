@@ -1,15 +1,19 @@
 #pragma once
 
-#include <cstdint>
-#include <glm/glm.hpp>
-#include <vector>
-
+#ifdef _WIN32
+#include <glad/glad.h>
+#else
 #ifdef __APPLE__
 #define GL_SILENCE_DEPRECATION
 #include <OpenGL/gl3.h>
 #else
 #include <SDL3/SDL_opengl.h>
 #endif
+#endif
+
+#include <cstdint>
+#include <glm/glm.hpp>
+#include <vector>
 
 struct InstanceData {
   glm::vec3 position;

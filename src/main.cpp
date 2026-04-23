@@ -3,12 +3,9 @@
 #endif
 
 #include <SDL3/SDL.h>
-
-#include <cstdio>
-
-#include "imgui.h"
-#include "imgui_impl_opengl3.h"
-#include "imgui_impl_sdl3.h"
+#ifdef _WIN32
+#include <glad/glad.h>
+#endif
 
 #if defined(IMGUI_IMPL_OPENGL_ES2)
 #include <SDL3/SDL_opengles2.h>
@@ -19,10 +16,14 @@
 #include <SDL3/SDL_opengl.h>
 #endif
 
+#include <cstdio>
 #include <glm/ext/matrix_clip_space.hpp>
 #include <glm/ext/matrix_transform.hpp>
 
 #include "Renderer.h"
+#include "imgui.h"
+#include "imgui_impl_opengl3.h"
+#include "imgui_impl_sdl3.h"
 
 static constexpr int kInitialCubeCount = 10000;
 static constexpr int kMaxCubeCount = 50000000;
@@ -296,6 +297,15 @@ int main(int, char**) {
   }
   SDL_GL_MakeCurrent(window, gl_context);
   SDL_GL_SetSwapInterval(1);  // Enable vsync
+
+#ifdef _WIN32
+  // Initialize GLAD
+  if (!gladLoadGLLoader((GLADloadproc)SDL_GL_GetProcAddress)) {
+    printf("Failed to initialize GLAD\n");
+    return -1;
+  }
+#endif
+
   SDL_ShowWindow(window);
 
   // Setup Dear ImGui context
