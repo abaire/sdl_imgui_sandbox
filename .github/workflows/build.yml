@@ -19,7 +19,7 @@ jobs:
         run: cmake --build build --config Release
 
       - name: Upload Artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: sandbox-windows
           path: build/Release/sandbox.exe
@@ -57,7 +57,7 @@ jobs:
         run: cmake --build build
 
       - name: Upload Artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: sandbox-linux
           path: build/sandbox
@@ -84,7 +84,7 @@ jobs:
           fi
 
       - name: Upload Artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: sandbox-macos
           path: sandbox-mac.zip
