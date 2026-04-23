@@ -98,19 +98,19 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Download Windows Artifact
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: sandbox-windows
           path: artifacts/windows
 
       - name: Download Linux Artifact
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: sandbox-linux
           path: artifacts/linux
 
       - name: Download macOS Artifact
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: sandbox-macos
           path: artifacts/macos
