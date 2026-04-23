@@ -69,14 +69,30 @@ Renderer::Renderer()
       height(0) {}
 
 Renderer::~Renderer() {
-  if (VAO) glDeleteVertexArrays(1, &VAO);
-  if (VBO) glDeleteBuffers(1, &VBO);
-  if (EBO) glDeleteBuffers(1, &EBO);
-  if (instanceVBO) glDeleteBuffers(1, &instanceVBO);
-  if (shaderProgram) glDeleteProgram(shaderProgram);
-  if (FBO) glDeleteFramebuffers(1, &FBO);
-  if (texture) glDeleteTextures(1, &texture);
-  if (RBO) glDeleteRenderbuffers(1, &RBO);
+  if (VAO) {
+    glDeleteVertexArrays(1, &VAO);
+  }
+  if (VBO) {
+    glDeleteBuffers(1, &VBO);
+  }
+  if (EBO) {
+    glDeleteBuffers(1, &EBO);
+  }
+  if (instanceVBO) {
+    glDeleteBuffers(1, &instanceVBO);
+  }
+  if (shaderProgram) {
+    glDeleteProgram(shaderProgram);
+  }
+  if (FBO) {
+    glDeleteFramebuffers(1, &FBO);
+  }
+  if (texture) {
+    glDeleteTextures(1, &texture);
+  }
+  if (RBO) {
+    glDeleteRenderbuffers(1, &RBO);
+  }
 }
 
 void Renderer::CompileShaders() {
@@ -226,9 +242,15 @@ void Renderer::CreateFBO(int w, int h) {
   width = w;
   height = h;
 
-  if (FBO) glDeleteFramebuffers(1, &FBO);
-  if (texture) glDeleteTextures(1, &texture);
-  if (RBO) glDeleteRenderbuffers(1, &RBO);
+  if (FBO) {
+    glDeleteFramebuffers(1, &FBO);
+  }
+  if (texture) {
+    glDeleteTextures(1, &texture);
+  }
+  if (RBO) {
+    glDeleteRenderbuffers(1, &RBO);
+  }
 
   glGenFramebuffers(1, &FBO);
   glBindFramebuffer(GL_FRAMEBUFFER, FBO);
@@ -255,7 +277,9 @@ void Renderer::CreateFBO(int w, int h) {
 }
 
 void Renderer::Render(const glm::mat4& view, const glm::mat4& projection, float time) {
-  if (FBO == 0) return;
+  if (FBO == 0) {
+    return;
+  }
 
   glBindFramebuffer(GL_FRAMEBUFFER, FBO);
   glViewport(0, 0, width, height);
