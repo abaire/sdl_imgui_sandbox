@@ -64,6 +64,16 @@ endif()
 
 add_executable(sandbox src/main.cpp src/Renderer.cpp)
 
+if(APPLE)
+    set_target_properties(sandbox PROPERTIES
+        MACOSX_BUNDLE TRUE
+        MACOSX_BUNDLE_BUNDLE_NAME "Sandbox"
+        MACOSX_BUNDLE_GUI_IDENTIFIER "com.example.sdl-imgui-sandbox"
+        MACOSX_BUNDLE_BUNDLE_VERSION "1.0.0"
+        MACOSX_BUNDLE_SHORT_VERSION_STRING "1.0.0"
+    )
+endif()
+
 target_link_libraries(sandbox PRIVATE imgui SDL3::SDL3-static glm::glm)
 
 if(APPLE)
