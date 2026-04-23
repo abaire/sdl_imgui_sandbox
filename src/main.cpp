@@ -107,7 +107,18 @@ void RenderThreadFunc(RenderThreadData* data) {
         glm::lookAt(glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, -1.0f), glm::vec3(0.0f, 1.0f, 0.0f));
 
     renderer.Render(view, projection, time);
-    glFinish();  // Ensure rendering is complete before hand-off
+
+    if (g_debug_hackery_settings.fence_sync) {
+      GLsync sync = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
+      if (sync) {
+        glClientWaitSync(sync, GL_SYNC_FLUSH_COMMANDS_BIT, GL_TIMEOUT_IGNORED);
+        glDeleteSync(sync);
+      }
+    } else if (g_debug_hackery_settings.flush_instead_of_finish) {
+      glFlush();
+    } else {
+      glFinish();
+    }
 
     {
       std::unique_lock<std::mutex> lock(data->mutex);
