@@ -5,8 +5,8 @@
 #include <cstdint>
 
 #ifdef __APPLE__
-#include <OpenGL/gl3.h>
 #define GL_SILENCE_DEPRECATION
+#include <OpenGL/gl3.h>
 #else
 #include <SDL3/SDL_opengl.h>
 #endif
