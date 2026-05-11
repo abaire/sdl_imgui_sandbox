@@ -71,12 +71,11 @@ struct RenderThreadData {
   int width = 1280;
   int height = 720;
   uint32_t texture_id = 0;
-  GloContext* ctx;
+  GloContext* glo_context;
 };
 
 void RenderThreadFunc(RenderThreadData* data) {
-  glo_set_current(data->ctx);
-
+  glo_set_current(data->glo_context);
   Renderer renderer;
   renderer.Init(data->cube_count);
 
@@ -99,6 +98,8 @@ void RenderThreadFunc(RenderThreadData* data) {
       h = data->height;
       count = data->cube_count;
     }
+
+    glo_set_current(data->glo_context);
 
     renderer.CreateFBO(w, h);
     renderer.UpdateInstanceCount(count);
@@ -152,7 +153,8 @@ void RenderThreadFunc(RenderThreadData* data) {
   glo_set_current(nullptr);
 }
 
-static void MainLoop(SDL_Window* window, std::thread& render_thread, RenderThreadData& thread_data, ImGuiIO& io) {
+static void MainLoop(SDL_Window* window, SDL_GLContext& context, std::thread& render_thread,
+                     RenderThreadData& thread_data, ImGuiIO& io) {
   // Main loop
   bool done = false;
 
@@ -179,6 +181,7 @@ static void MainLoop(SDL_Window* window, std::thread& render_thread, RenderThrea
     }
 
     if (!g_debug_hackery_settings.ui_render_frequency_ns || now >= next_render) {
+      SDL_GL_MakeCurrent(window, context);
       thread_data.cube_count = g_debug_hackery_settings.cube_count;
 
       static uint32_t tex = 0;
@@ -271,17 +274,16 @@ int main(int, char**) {
   thread_data.width = 1280;
   thread_data.height = 720;
   thread_data.cube_count = g_debug_hackery_settings.cube_count;
-  thread_data.ctx = glo_context_create();
-  if (!thread_data.ctx) {
+  thread_data.glo_context = glo_context_create();
+  if (!thread_data.glo_context) {
     printf("Failed to create offscreen GL context\n");
     return -1;
   }
   glo_set_current(nullptr);
-  SDL_GL_MakeCurrent(window, gl_context);
 
   std::thread render_thread(RenderThreadFunc, &thread_data);
 
-  MainLoop(window, render_thread, thread_data, io);
+  MainLoop(window, gl_context, render_thread, thread_data, io);
 
   // Cleanup
   {
@@ -291,7 +293,7 @@ int main(int, char**) {
   }
   render_thread.join();
 
-  glo_context_destroy(thread_data.ctx);
+  glo_context_destroy(thread_data.glo_context);
 
   ImGui_ImplOpenGL3_Shutdown();
   ImGui_ImplSDL3_Shutdown();
